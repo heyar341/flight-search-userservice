@@ -1,0 +1,52 @@
+version: "3"
+services:
+  app:
+    build: .
+    container_name: flight_serach_user_service
+    tty: true
+    ports:
+      - "5000:5000"
+    working_dir: /app
+    env_file:
+      - dev.env
+    volumes:
+      - .:/app
+    depends_on:
+      - db
+    networks:
+      - default
+      - flight_search_microservices
+
+  db:
+    container_name: flight_serach_user_service_db
+    image: postgres:12.0-alpine
+    env_file:
+      - dev.env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  pgadmin:
+    image: dpage/pgadmin4:6.4
+    container_name: pgadmin
+    ports:
+      - "7000:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: example@example.com
+      PGADMIN_DEFAULT_PASSWORD: password
+    hostname: pgadmin4
+    depends_on:
+      - db
+    restart: always
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+
+volumes:
+  postgres_data:
+  pgadmin-data:
+
+networks:
+  flight_search_microservices:
+    external:
+      name: flight_search_microservices
