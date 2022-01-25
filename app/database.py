@@ -4,15 +4,11 @@ from sqlalchemy.orm import sessionmaker
 from os import environ
 
 DRIVER = "postgresql+psycopg2"
-try:
-    USER = environ["POSTGRES_USER"]
-    PASSWORD = environ["POSTGRES_PASSWORD"]
-    HOST = environ["POSTGRES_HOST"]
-    PORT = environ["POSTGRES_PORT"]
-    DB_NAME = environ["POSTGRES_DB"]
-except KeyError as e:
-    print(e)
-    raise KeyError
+USER = environ.get("POSTGRES_USER")
+PASSWORD = environ.get("POSTGRES_PASSWORD")
+HOST = environ.get("POSTGRES_HOST")
+PORT = environ.get("POSTGRES_PORT")
+DB_NAME = environ.get("POSTGRES_DB")
 
 SQL_ALCHEMY_DATABASE_URL = f"{DRIVER}://{USER}:{PASSWORD}@{HOST}:{PORT}/{DB_NAME}"
 
