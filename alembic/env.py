@@ -5,9 +5,20 @@ from sqlalchemy import pool
 
 from alembic import context
 
+from os import environ
+from app.models import Base
+
+DRIVER = "postgresql+psycopg2"
+USER = environ.get("POSTGRES_USER")
+PASSWORD = environ.get("POSTGRES_PASSWORD")
+HOST = environ.get("POSTGRES_HOST")
+PORT = environ.get("POSTGRES_PORT")
+DB_NAME = environ.get("POSTGRES_DB")
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+config.set_main_option("sqlalchemy.url",
+                       f"{DRIVER}://{USER}:{PASSWORD}@{HOST}:{PORT}/{DB_NAME}")
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
@@ -17,7 +28,8 @@ fileConfig(config.config_file_name)
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-target_metadata = None
+target_metadata = Base.metadata
+
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
