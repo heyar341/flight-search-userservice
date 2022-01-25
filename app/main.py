@@ -17,7 +17,7 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)) -> None:
         models.User.email == user.email).first()
     if user_exists:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=f"{user.email} is already registerd")
+                            detail=f"{user.email} is already registered")
     user.password = hash_password(user.password)
     new_user = models.User(**user.dict())
     db.add(new_user)
