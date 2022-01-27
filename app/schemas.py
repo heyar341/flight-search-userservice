@@ -15,6 +15,7 @@ class UserOut(BaseModel):
     class Config:
         orm_mode = True
 
+
 class NameUpdate(BaseModel):
     current_username: str
     new_username: str
@@ -30,9 +31,6 @@ class PasswordUpdate(BaseModel):
     new_password: str
 
 
-class UserOut(BaseModel):
-    username: str
+class Login(BaseModel):
     email: EmailStr
-
-    class Config:
-        orm_mode = True
+    password: str
