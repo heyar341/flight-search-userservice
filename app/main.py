@@ -28,8 +28,8 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)) -> None:
 
 @app.get("/{user_id}", status_code=status.HTTP_200_OK, response_model=UserOut)
 def get_user(user_id: int, db: Session = Depends(get_db)) -> UserOut:
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-
+    user = db.query(models.User.username, models.User.email).filter(
+        models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"ユーザー情報が取得できませんでした。")
