@@ -8,6 +8,13 @@ class UserCreate(BaseModel):
     password: str
 
 
+class UserOut(BaseModel):
+    username: str
+    email: EmailStr
+
+    class Config:
+        orm_mode = True
+
 class NameUpdate(BaseModel):
     current_username: str
     new_username: str
@@ -21,3 +28,11 @@ class EmailUpdate(BaseModel):
 class PasswordUpdate(BaseModel):
     current_password: str
     new_password: str
+
+
+class UserOut(BaseModel):
+    username: str
+    email: EmailStr
+
+    class Config:
+        orm_mode = True

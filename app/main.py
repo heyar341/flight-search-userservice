@@ -1,8 +1,10 @@
 import datetime
 import uvicorn
 from fastapi import FastAPI, status, Depends, HTTPException
-from schemas import UserCreate, NameUpdate, EmailUpdate, PasswordUpdate
+from schemas import UserCreate, UserOut, NameUpdate, EmailUpdate, PasswordUpdate
 from utils import hash_password, compare_hash
+from schemas import UserCreate, UserOut
+from utils import hash_password
 import models
 from database import get_db
 from sqlalchemy.orm import Session
@@ -29,6 +31,16 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)) -> None:
     db.commit()
     db.refresh(new_user)
     publish_message(user.email, REGISTER_MAIL_QUEUE_NAME)
+
+
+@app.get("/{user_id}", status_code=status.HTTP_200_OK, response_model=UserOut)
+def get_user(user_id: int, db: Session = Depends(get_db)) -> UserOut:
+    user = db.query(models.User.username, models.User.email).filter(
+        models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"ユーザー情報が取得できませんでした。")
+    return user
 
 
 @app.patch("/username/{user_id}", status_code=status.HTTP_200_OK)
