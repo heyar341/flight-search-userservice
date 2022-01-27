@@ -1,10 +1,9 @@
 import datetime
 import uvicorn
 from fastapi import FastAPI, status, Depends, HTTPException
-from schemas import UserCreate, UserOut, NameUpdate, EmailUpdate, PasswordUpdate
+from schemas import (UserCreate, UserOut, NameUpdate, EmailUpdate,
+                     PasswordUpdate, Login)
 from utils import hash_password, compare_hash
-from schemas import UserCreate, UserOut
-from utils import hash_password
 import models
 from database import get_db
 from sqlalchemy.orm import Session
@@ -108,6 +107,22 @@ def update_password(user_id: int, request: PasswordUpdate,
         synchronize_session=False)
     db.commit()
     logger.info(f"User id:{user_id} updated password")
+
+
+@app.post("/login", status_code=status.HTTP_200_OK)
+def login(request: Login, db: Session = Depends(get_db)) -> dict:
+    db_query = db.query(models.User.id, models.User.password).filter(
+        models.User.email == request.email)
+    user = db_query.first()
+    if not user:
+        return {"login": False}
+
+    password_matched = compare_hash(request.password, user.password)
+    if not password_matched:
+        return {"login": False}
+
+    logger.info(f"User id:{user.id} logged in.")
+    return {"login": True}
 
 
 if __name__ == "__main__":
