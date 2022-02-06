@@ -8,6 +8,19 @@ class UserCreate(BaseModel):
     password: str
 
 
+class Token(BaseModel):
+    token: str
+    manipulation: str
+
+
+class UserCreateReq(BaseModel):
+    user_data: UserCreate
+    token_data: Token
+
+    class Config:
+        orm_mode = True
+
+
 class UserOut(BaseModel):
     username: str
     email: EmailStr

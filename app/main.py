@@ -1,9 +1,9 @@
 import datetime
 import uvicorn
 from fastapi import FastAPI, status, Depends, HTTPException
-from schemas import (UserCreate, UserOut, NameUpdate, EmailUpdate,
+from schemas import (UserCreateReq, UserOut, NameUpdate, EmailUpdate,
                      PasswordUpdate, Login)
-from utils import hash_password, compare_hash
+from utils import hash_password, compare_hash, check_token
 import models
 from database import get_db
 from sqlalchemy.orm import Session
@@ -13,23 +13,28 @@ from logging import getLogger
 app = FastAPI()
 logger = getLogger("uvicorn")
 
-REGISTER_MAIL_QUEUE_NAME = "register_mail_queue"
-UPDATE_MAIL_QUEUE_NAME = "update_mail_queue"
 
+@app.post("/register", status_code=status.HTTP_201_CREATED)
+def create_user(req: UserCreateReq, db: Session = Depends(get_db)) -> None:
+    user_data = req.user_data
+    token_data = req.token_data
+    exception = check_token(token_data.token, user_data.email,
+                            token_data.manipulation, db)
+    if exception:
+        raise exception
 
-@app.post("/", status_code=status.HTTP_201_CREATED)
-def create_user(user: UserCreate, db: Session = Depends(get_db)) -> None:
     user_exists = db.query(models.User).filter(
-        models.User.email == user.email).first()
+        models.User.email == user_data.email).first()
     if user_exists:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=f"メールアドレス{user.email} はすでに登録されています。")
-    user.password = hash_password(user.password)
-    new_user = models.User(**user.dict())
+                            detail=f"メールアドレス{user_data.email} "
+                                   f"はすでに登録されています。")
+    user_data.password = hash_password(user_data.password)
+    new_user = models.User(**user_data.dict())
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    publish_message(user.email, REGISTER_MAIL_QUEUE_NAME)
+    publish_message(email=user_data.email, queue_name="register_confirm_queue")
 
 
 @app.get("/{user_id}", status_code=status.HTTP_200_OK, response_model=UserOut)
@@ -86,7 +91,7 @@ def update_email(user_id: int, request: EmailUpdate,
                      models.User.updated_at: datetime.datetime.now()},
                     synchronize_session=False)
     db.commit()
-    publish_message(request.new_email, UPDATE_MAIL_QUEUE_NAME)
+    publish_message(email=request.new_email, queue_name="update_mail_queue")
     logger.info(f"User id:{user_id} updated email")
 
 
