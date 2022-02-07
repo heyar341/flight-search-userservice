@@ -10,7 +10,7 @@ class UserCreate(BaseModel):
 
 class Token(BaseModel):
     token: str
-    manipulation: str
+    action: str
 
 
 class UserCreateReq(BaseModel):

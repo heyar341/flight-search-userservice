@@ -9,7 +9,7 @@ import sys
 import json
 
 from database import SessionLocal
-from models import Token, Manipulation
+from models import Token, Action
 
 USER = environ.get("RABBITMQ_USER")
 PASSWORD = environ.get("RABBITMQ_PASSWORD")
@@ -54,11 +54,11 @@ class ConsumerThread(Thread):
         self.daemon = True
         self.name = action
 
-        self.action = action
+        self.queue_name = action
         if action == "pre_register":
-            self.manipulation = "register"
+            self.action = "register"
         else:
-            self.manipulation = action
+            self.action = action
         self.base_URL = environ.get(action + "_base_URL")
         system_logger.info(f"Thread {self.name} started.")
 
@@ -68,20 +68,18 @@ class ConsumerThread(Thread):
 
         url_with_token = self.save_token_and_email(email=mail_address)
         message = {"email": mail_address, "URL": url_with_token}
-        publish_message(message=message, queue_name=self.action + "_email")
+        publish_message(message=message, queue_name=self.queue_name + "_email")
 
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
     def save_token_and_email(self, email: str) -> str:
         token = uuid4().hex
         with SessionLocal() as db:
-            token_data = Token(**{"token": token, "email": email})
+            action_id = db.query(Action.id).filter(
+                Action.action == self.action).first()[0]
+            token_data = Token(
+                **{"token": token, "email": email, "action_id": action_id})
             db.add(token_data)
-            db.commit()
-            manipulation = Manipulation(
-                **{"token_id": token_data.id, "manipulation": self.manipulation}
-            )
-            db.add(manipulation)
             db.commit()
         return f"{self.base_URL}/?email={email}&email_token={token}"
 
@@ -98,11 +96,11 @@ class ConsumerThread(Thread):
             return
         channel = connection.channel()
 
-        channel.queue_declare(queue=self.action, durable=True)
-        print(f"Waiting for messages from {self.action}.")
+        channel.queue_declare(queue=self.queue_name, durable=True)
+        print(f"Waiting for messages from {self.queue_name}.")
         channel.basic_qos(prefetch_count=1)
         channel.basic_consume(
-            queue=self.action, on_message_callback=self.callback,
+            queue=self.queue_name, on_message_callback=self.callback,
             consumer_tag=self.action
         )
 

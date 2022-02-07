@@ -22,7 +22,7 @@ def create_user(req: UserCreateReq, db: Session = Depends(get_db)) -> None:
     user_data = req.user_data
     token_data = req.token_data
     exception = check_token(token=token_data.token, email=user_data.email,
-                            req_manipulation=token_data.manipulation, db=db)
+                            req_action=token_data.action, db=db)
     if exception:
         raise exception
 

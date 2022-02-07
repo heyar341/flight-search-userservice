@@ -1,10 +1,10 @@
 from hashlib import sha256
 from os import environ
-from fastapi import Depends, HTTPException, status
+from fastapi import HTTPException, status
 from datetime import datetime, timezone
-
 from sqlalchemy.orm import Session
-from models import Token, Manipulation
+
+from models import Token, Action
 
 
 def hash_password(password: str) -> hex:
@@ -20,20 +20,18 @@ def compare_hash(raw_password: str, hashed_password: str) -> bool:
         return False
 
 
-def check_token(token: str, email: str, req_manipulation: str,
+def check_token(token: str, email: str, req_action: str,
                 db: Session) -> HTTPException | None:
-    auth_data = db.query(Token.email, Token.expires_at,
-                         Manipulation.manipulation
-                         ).join(Manipulation, Token.id == Manipulation.token_id
-                                ).filter(Token.token == token,
-                                         Token.email == email).first()
+    auth_data = db.query(Token.email, Token.expires_at, Action.action).join(
+        Action, Token.action_id == Action.id).filter(
+        Token.token == token, Token.email == email).first()
 
     if not auth_data:
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                              detail="認証情報が取得できませんでした。")
 
-    email, expires_at, manipulation = auth_data
-    if manipulation != req_manipulation:
+    email, expires_at, action = auth_data
+    if action != req_action:
         return HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                              detail="認証情報が一致しません。")
 
