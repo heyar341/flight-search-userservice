@@ -1,35 +1,44 @@
 import datetime
 import uvicorn
 from fastapi import FastAPI, status, Depends, HTTPException
-from schemas import (UserCreate, UserOut, NameUpdate, EmailUpdate,
+import threading
+from anyio._backends._asyncio import WorkerThread
+
+from schemas import (UserCreateReq, UserOut, NameUpdate, EmailUpdate,
                      PasswordUpdate, Login)
-from utils import hash_password, compare_hash
+from utils import hash_password, compare_hash, check_token
 import models
 from database import get_db
 from sqlalchemy.orm import Session
-from rabbitmq import publish_message
+from rabbitmq import publish_message, ConsumerThread
 from logging import getLogger
 
 app = FastAPI()
 logger = getLogger("uvicorn")
 
-REGISTER_MAIL_QUEUE_NAME = "register_mail_queue"
-UPDATE_MAIL_QUEUE_NAME = "update_mail_queue"
 
+@app.post("/register", status_code=status.HTTP_201_CREATED)
+def create_user(req: UserCreateReq, db: Session = Depends(get_db)) -> None:
+    user_data = req.user_data
+    token_data = req.token_data
+    exception = check_token(token=token_data.token, email=user_data.email,
+                            req_action=token_data.action, db=db)
+    if exception:
+        raise exception
 
-@app.post("/", status_code=status.HTTP_201_CREATED)
-def create_user(user: UserCreate, db: Session = Depends(get_db)) -> None:
     user_exists = db.query(models.User).filter(
-        models.User.email == user.email).first()
+        models.User.email == user_data.email).first()
     if user_exists:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=f"メールアドレス{user.email} はすでに登録されています。")
-    user.password = hash_password(user.password)
-    new_user = models.User(**user.dict())
+                            detail=f"メールアドレス{user_data.email} "
+                                   f"はすでに登録されています。")
+    user_data.password = hash_password(user_data.password)
+    new_user = models.User(**user_data.dict())
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    publish_message(user.email, REGISTER_MAIL_QUEUE_NAME)
+    publish_message(message={"email": user_data.email},
+                    queue_name="confirm_register_email")
 
 
 @app.get("/{user_id}", status_code=status.HTTP_200_OK, response_model=UserOut)
@@ -86,7 +95,8 @@ def update_email(user_id: int, request: EmailUpdate,
                      models.User.updated_at: datetime.datetime.now()},
                     synchronize_session=False)
     db.commit()
-    publish_message(request.new_email, UPDATE_MAIL_QUEUE_NAME)
+    publish_message(message={"email": request.new_email},
+                    queue_name="update_email_email")
     logger.info(f"User id:{user_id} updated email")
 
 
@@ -125,5 +135,19 @@ def login(request: Login, db: Session = Depends(get_db)) -> dict:
     return {"login": True}
 
 
+@app.on_event("shutdown")
+def terminate_threads() -> None:
+    for thread in threading.enumerate():
+        if thread is threading.current_thread() or type(thread) == WorkerThread:
+            continue
+        thread.terminate_consume()
+
+
 if __name__ == "__main__":
+    actions = ("pre_register", "update_email")
+
+    for action in actions:
+        thread = ConsumerThread(action=action)
+        thread.start()
+
     uvicorn.run("main:app", host="0.0.0.0", port=5000, reload=True)
