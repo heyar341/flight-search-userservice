@@ -1,17 +1,21 @@
 import datetime
 import uvicorn
 from fastapi import FastAPI, status, Depends, HTTPException
+from fastapi.responses import Response, RedirectResponse
 import threading
 from anyio._backends._asyncio import WorkerThread
+from logging import getLogger
+from sqlalchemy.orm import Session
+from os import environ
 
 from schemas import (UserCreateReq, UserOut, NameUpdate, EmailUpdate,
-                     PasswordUpdate, Login)
+                     PasswordUpdate)
 from utils import hash_password, compare_hash, check_token
 import models
 from database import get_db
-from sqlalchemy.orm import Session
 from rabbitmq import publish_message, ConsumerThread
-from logging import getLogger
+from access_token import create_access_token, verify_access_token
+from forms import LoginForm
 
 app = FastAPI()
 logger = getLogger("uvicorn")
@@ -53,7 +57,7 @@ def get_user(user_id: int, db: Session = Depends(get_db)) -> UserOut:
 
 @app.patch("/username/{user_id}", status_code=status.HTTP_200_OK)
 def update_username(user_id: int, request: NameUpdate,
-                    db: Session = Depends(get_db)) -> None:
+                    db: Session = Depends(get_db), ) -> None:
     db_query = db.query(models.User).filter(
         models.User.username == request.current_username,
         models.User.id == user_id)
@@ -120,19 +124,37 @@ def update_password(user_id: int, request: PasswordUpdate,
 
 
 @app.post("/login", status_code=status.HTTP_200_OK)
-def login(request: Login, db: Session = Depends(get_db)) -> dict:
-    db_query = db.query(models.User.id, models.User.password).filter(
-        models.User.email == request.email)
-    user = db_query.first()
+def login(
+        form_data: LoginForm = Depends(),
+        db: Session = Depends(get_db)) -> Response:
+    user = db.query(
+        models.User.id, models.User.username, models.User.password).filter(
+        models.User.email == form_data.email).first()
+    error_response = RedirectResponse(url=environ.get("LOGIN_URL"))
+    error_response.set_cookie(
+        key="error_msg",
+        value="Fail",
+        max_age=1,
+        path="/accounts/login",
+        domain=environ.get("APP_DOMAIN"),
+        httponly=True)
     if not user:
-        return {"login": False}
+        return error_response
 
-    password_matched = compare_hash(request.password, user.password)
+    password_matched = compare_hash(form_data.password, user.password)
     if not password_matched:
-        return {"login": False}
-
-    logger.info(f"User id:{user.id} logged in.")
-    return {"login": True}
+        return error_response
+    token = create_access_token({"user_id": user.id})
+    logger.info(f"User id:{user.id} , username:{user.username} logged in.")
+    success_response = RedirectResponse(url=environ.get("HOME_URL"))
+    success_response.set_cookie(
+        key="access_token",
+        value=token,
+        max_age=3600 * 24 * 30,
+        path="/",
+        domain=environ.get("APP_DOMAIN"),
+        httponly=True)
+    return success_response
 
 
 @app.on_event("shutdown")
