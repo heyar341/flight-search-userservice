@@ -4,7 +4,7 @@ from fastapi import HTTPException, status
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
-from models import Token, Action
+from app.models import Token, Action
 
 
 def hash_password(password: str) -> hex:

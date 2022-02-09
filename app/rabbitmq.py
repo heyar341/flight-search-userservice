@@ -9,7 +9,7 @@ import sys
 import json
 
 from database import SessionLocal
-from models import Token, Action
+from app.models import Token, Action
 
 USER = environ.get("RABBITMQ_USER")
 PASSWORD = environ.get("RABBITMQ_PASSWORD")
