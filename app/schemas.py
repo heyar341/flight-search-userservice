@@ -1,5 +1,4 @@
-from pydantic import BaseModel
-from pydantic import EmailStr
+from pydantic import BaseModel, EmailStr
 
 
 class UserCreate(BaseModel):
@@ -44,6 +43,10 @@ class PasswordUpdate(BaseModel):
     new_password: str
 
 
-class Login(BaseModel):
+class JWTData(BaseModel):
+    user_id: str
+
+
+class LoginData(BaseModel):
     email: EmailStr
     password: str
