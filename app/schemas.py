@@ -45,3 +45,8 @@ class PasswordUpdate(BaseModel):
 
 class JWTData(BaseModel):
     user_id: str
+
+
+class LoginData(BaseModel):
+    email: EmailStr
+    password: str

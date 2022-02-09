@@ -1,21 +1,18 @@
 import datetime
 import uvicorn
-from fastapi import FastAPI, status, Depends, HTTPException, Cookie, Request
-from fastapi.responses import Response, RedirectResponse
+from fastapi import FastAPI, status, Depends, HTTPException, Request
 import threading
 from anyio._backends._asyncio import WorkerThread
 from logging import getLogger
 from sqlalchemy.orm import Session
-from os import environ
 
 from schemas import (UserCreateReq, UserOut, NameUpdate, EmailUpdate,
-                     PasswordUpdate)
+                     PasswordUpdate, LoginData)
 from utils import hash_password, compare_hash, check_token
 import models
 from database import get_db
 from rabbitmq import publish_message, ConsumerThread
 from access_token import create_access_token, verify_access_token
-from forms import LoginForm
 
 app = FastAPI()
 logger = getLogger("uvicorn")
@@ -175,36 +172,24 @@ def update_password(
 
 @app.post("/login", status_code=status.HTTP_200_OK)
 def login(
-        form_data: LoginForm = Depends(),
-        db: Session = Depends(get_db)) -> Response:
+        login_data: LoginData,
+        db: Session = Depends(get_db)) -> HTTPException or dict:
     user = db.query(
         models.User.id, models.User.username, models.User.password).filter(
-        models.User.email == form_data.email).first()
-    error_response = RedirectResponse(url=environ.get("LOGIN_URL"))
-    error_response.set_cookie(
-        key="error_msg",
-        value="Fail",
-        max_age=1,
-        path="/accounts/login",
-        domain=environ.get("APP_DOMAIN"),
-        httponly=True)
-    if not user:
-        return error_response
+        models.User.email == login_data.email).first()
 
-    password_matched = compare_hash(form_data.password, user.password)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="入力されたパスワードが間違っています。")
+
+    password_matched = compare_hash(login_data.password, user.password)
     if not password_matched:
-        return error_response
-    token = create_access_token({"user_id": user.id})
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="入力されたパスワードが間違っています。")
+    access_token = create_access_token({"user_id": user.id})
     logger.info(f"User id:{user.id} , username:{user.username} logged in.")
-    success_response = RedirectResponse(url=environ.get("HOME_URL"))
-    success_response.set_cookie(
-        key="access_token",
-        value=token,
-        max_age=3600 * 24 * 30,
-        path="/",
-        domain=environ.get("APP_DOMAIN"),
-        httponly=True)
-    return success_response
+
+    return {"access_token": access_token}
 
 
 @app.on_event("shutdown")
