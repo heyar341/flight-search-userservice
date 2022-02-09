@@ -1,23 +1,21 @@
-import datetime
 import uvicorn
-from fastapi import FastAPI, status, Depends, HTTPException, Request
+from fastapi import FastAPI, status, Depends, HTTPException
 import threading
 from anyio._backends._asyncio import WorkerThread
 from logging import getLogger
 from sqlalchemy.orm import Session
 
-from schemas import (UserCreateReq, UserOut, NameUpdate, EmailUpdate,
-                     PasswordUpdate, LoginData)
+from schemas import UserCreateReq, LoginData
 from utils import hash_password, compare_hash, check_token
 import app.models as models
 from database import get_db
 from rabbitmq import publish_message, ConsumerThread
-from access_token import create_access_token, verify_access_token
-from routers import update
+from access_token import create_access_token
+from routers import update, show
 
-app = FastAPI()
 logger = getLogger("uvicorn")
-
+app = FastAPI()
+app.include_router(show.router)
 app.include_router(update.router)
 
 
@@ -43,27 +41,6 @@ def create_user(req: UserCreateReq, db: Session = Depends(get_db)) -> None:
     db.refresh(new_user)
     publish_message(message={"email": user_data.email},
                     queue_name="confirm_register_email")
-
-
-@app.get("/user_data", status_code=status.HTTP_200_OK, response_model=UserOut)
-def get_user(req: Request, db: Session = Depends(get_db)) -> UserOut:
-    access_token = req.cookies.get("access_token")
-    if not access_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="ログインしていません。")
-    token_data, error = verify_access_token(access_token)
-    if error:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=error)
-    user = db.query(models.User.username, models.User.email).filter(
-        models.User.id == token_data.user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"ユーザー情報が取得できませんでした。")
-    return user
 
 
 @app.post("/login", status_code=status.HTTP_200_OK)
@@ -103,4 +80,5 @@ if __name__ == "__main__":
         thread = ConsumerThread(action=action)
         thread.start()
 
-    uvicorn.run("main:app", host="0.0.0.0", port=5000, reload=True)
+    # debug時必要ないので、一時的にコメントアウト
+    # uvicorn.run("main:app", host="0.0.0.0", port=5000, reload=True)

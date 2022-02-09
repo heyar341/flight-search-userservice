@@ -1,34 +1,25 @@
 import datetime
-from fastapi import status, Depends, HTTPException, Request, APIRouter
+from fastapi import status, Depends, HTTPException, APIRouter
 from logging import getLogger
 from sqlalchemy.orm import Session
 
-from app.schemas import NameUpdate, EmailUpdate, PasswordUpdate
+from app.schemas import NameUpdate, EmailUpdate, PasswordUpdate, JWTData
 from app.utils import hash_password, compare_hash
 import app.models as models
 from app.database import get_db
 from app.rabbitmq import publish_message
-from app.access_token import verify_access_token
+from app.routers.check_access_token import CheckAccessToken
 
 router = APIRouter(prefix="/update")
 logger = getLogger("uvicorn")
+oauth2_scheme = CheckAccessToken()
 
 
 @router.patch("/username", status_code=status.HTTP_200_OK)
 def update_username(
         update_data: NameUpdate,
-        req: Request,
+        token_data: JWTData = Depends(oauth2_scheme),
         db: Session = Depends(get_db)) -> HTTPException or None:
-    access_token = req.cookies.get("access_token")
-    if not access_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="ログインしていません。")
-    token_data, error = verify_access_token(access_token)
-    if error:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=error)
     db_query = db.query(models.User).filter(
         models.User.username == update_data.current_username,
         models.User.id == token_data.user_id)
@@ -51,18 +42,8 @@ def update_username(
 @router.patch("/email", status_code=status.HTTP_200_OK)
 def update_email(
         update_data: EmailUpdate,
-        req: Request,
+        token_data: JWTData = Depends(oauth2_scheme),
         db: Session = Depends(get_db)) -> None:
-    access_token = req.cookies.get("access_token")
-    if not access_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="ログインしていません。")
-    token_data, error = verify_access_token(access_token)
-    if error:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=error)
     db_query = db.query(models.User).filter(
         models.User.email == update_data.current_email,
         models.User.id == token_data.user_id)
@@ -92,18 +73,8 @@ def update_email(
 @router.patch("/password", status_code=status.HTTP_200_OK)
 def update_password(
         update_data: PasswordUpdate,
-        req: Request,
+        token_data: JWTData = Depends(oauth2_scheme),
         db: Session = Depends(get_db)) -> None:
-    access_token = req.cookies.get("access_token")
-    if not access_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="ログインしていません。")
-    token_data, error = verify_access_token(access_token)
-    if error:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=error)
     db_query = db.query(models.User).filter(
         models.User.id == token_data.user_id)
     user = db_query.first()
