@@ -1,11 +1,12 @@
-from fastapi import status, Depends, HTTPException, APIRouter
 from logging import getLogger
+
+from fastapi import status, Depends, HTTPException, APIRouter
 from sqlalchemy.orm import Session
 
-from app.schemas import JWTData, UserOut
 import app.models as models
 from app.database import get_db
 from app.routers.check_access_token import CheckAccessToken
+from app.schemas import JWTData, UserOut
 
 router = APIRouter(prefix="/show")
 logger = getLogger("uvicorn")

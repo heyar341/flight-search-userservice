@@ -1,10 +1,11 @@
+from datetime import datetime, timedelta
+from logging import getLogger
+from os import environ
+
 from jose import jwt
 from jose.exceptions import JWTError, ExpiredSignatureError, JWTClaimsError
-from datetime import datetime, timedelta
-from os import environ
-from logging import getLogger
 
-from schemas import JWTData
+from app.schemas import JWTData
 
 SECRET_KEY = environ.get("JWT_SECRET_KEY")
 ALGORITHM = environ.get("JWT_ALGORITHM")

@@ -1,12 +1,13 @@
-from fastapi import status, Depends, HTTPException, APIRouter
-from sqlalchemy.orm import Session
 from logging import getLogger
 
+from fastapi import status, Depends, HTTPException, APIRouter
+from sqlalchemy.orm import Session
+
+import app.models as models
+from app.access_token import create_access_token
+from app.database import get_db
 from app.schemas import LoginData
 from app.utils import compare_hash
-import app.models as models
-from app.database import get_db
-from app.access_token import create_access_token
 
 router = APIRouter(prefix="/auth")
 logger = getLogger("uvicorn")

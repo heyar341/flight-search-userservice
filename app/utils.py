@@ -1,7 +1,8 @@
+from datetime import datetime, timezone
 from hashlib import sha256
 from os import environ
+
 from fastapi import HTTPException, status
-from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.models import Token, Action
