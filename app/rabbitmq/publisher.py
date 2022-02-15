@@ -3,9 +3,11 @@ import logging
 import sys
 from logging import getLogger
 from os import environ
+from socket import gaierror
 from time import sleep
 
 import pika
+from pika.exceptions import StreamLostError, AMQPConnectionError
 
 publisher_logger = getLogger(__name__)
 publisher_logger.setLevel(logging.INFO)
@@ -20,55 +22,59 @@ class PublisherHandler(object):
 
     def __init__(self):
         self._connection = None
-        self.set_connection()
-        self.publishers = {}
+        self._set_connection()
+        self._publishers = {}
 
-    def make_connection(self) -> (pika.BlockingConnection or None, bool):
+    def _make_connection(self) -> (pika.BlockingConnection or None, bool):
         try:
             params = pika.URLParameters(
                 f"amqp://{self.USER}:{self.PASSWORD}@{self.HOST}:{self.PORT}")
             connection = pika.BlockingConnection(params)
-        except NameError as e:
-            publisher_logger.error(
-                f"Failed to connect to RabbitMQ. {type(e)}: {e}")
-            return None, False
-        except RuntimeError as e:
+        except (NameError, RuntimeError, gaierror, AMQPConnectionError) as e:
             publisher_logger.error(
                 f"Failed to connect to RabbitMQ. {type(e)}: {e}")
             return None, False
         return connection, True
 
-    def set_connection(self):
-        for try_connect in range(5):
-            self._connection, is_open = self.make_connection()
+    def _set_connection(self) -> None or ConnectionError:
+        for try_connect in range(10):
+            self._connection, is_open = self._make_connection()
             if is_open:
                 publisher_logger.info("publisher_handler connected to RabbitMQ")
                 break
             else:
-                if try_connect == 4:
-                    raise ConnectionError()
+                if try_connect == 9:
+                    raise ConnectionError("Couldn't connect to RabbitMQ.")
                 sleep(5)
 
-    def publish(self, queue_name: str, message: dict, action: str):
+    def publish(self, queue_name: str, message: dict, action: str) -> None:
         if self._connection.is_closed:
-            self.set_connection()
-            if self.publishers:
-                for publisher in self.publishers.values():
+            self._set_connection()
+            if self._publishers:
+                for publisher in self._publishers.values():
                     publisher.refresh_connection(self._connection)
 
-        if action not in self.publishers:
+        if action not in self._publishers:
             publisher = Publisher(
                 queue_name=queue_name,
                 connection=self._connection)
-            self.publishers[action] = publisher
-        self.publishers[action].publish_message(message=message)
-
-        if action not in self.publishers:
-            publisher = Publisher(
-                queue_name=queue_name,
-                connection=self._connection)
-            self.publishers[action] = publisher
-        self.publishers[action].publish_message(message=message)
+            self._publishers[action] = publisher
+        try:
+            self._publishers[action].publish_message(message=message)
+        except StreamLostError:
+            # heartbeatによりRabbitMQがconnectionを閉じた場合half-openの状態になる。
+            # self._connection.is_closedはFalseとなるが、
+            # 実際にはconnectionは閉じているためStreamLostErrorとなる。
+            self._set_connection()
+            if self._publishers:
+                for publisher in self._publishers.values():
+                    publisher.refresh_connection(self._connection)
+            if action not in self._publishers:
+                publisher = Publisher(
+                    queue_name=queue_name,
+                    connection=self._connection)
+                self._publishers[action] = publisher
+            self._publishers[action].publish_message(message=message)
 
     def terminate_connection(self) -> None:
         publisher_logger.info(
@@ -96,12 +102,11 @@ class Publisher(object):
             properties=pika.BasicProperties(
                 delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE)
         )
-
         publisher_logger.info(
             f"User service sent email message to RabbiMQ. email: "
-            f"{message.get('email')}")
+            f"{message.get('email')}.")
 
-    def refresh_connection(self, connection: pika.BlockingConnection):
+    def refresh_connection(self, connection: pika.BlockingConnection) -> None:
         self._connection = connection
 
 

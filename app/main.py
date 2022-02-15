@@ -1,5 +1,4 @@
 import threading
-from logging import getLogger
 
 from anyio._backends._asyncio import WorkerThread
 from fastapi import FastAPI
@@ -7,8 +6,6 @@ from fastapi import FastAPI
 from app.rabbitmq.consumer import ConsumerThread
 from app.rabbitmq.publisher import publisher_handler
 from app.routers import register, update, show, auth
-
-logger = getLogger("uvicorn")
 
 app = FastAPI()
 app.include_router(show.router)
@@ -37,4 +34,5 @@ if __name__ == "__main__":
         consumer_thread.start()
 
     # debug時必要ないので、一時的にコメントアウト
+    # import uvicorn
     # uvicorn.run("main:app", host="0.0.0.0", port=5000)
