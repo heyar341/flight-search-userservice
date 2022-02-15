@@ -1,14 +1,15 @@
 import datetime
-from fastapi import status, Depends, HTTPException, APIRouter
 from logging import getLogger
+
+from fastapi import status, Depends, HTTPException, APIRouter
 from sqlalchemy.orm import Session
 
-from app.schemas import NameUpdate, EmailUpdate, PasswordUpdate, JWTData
-from app.utils import hash_password, compare_hash
 import app.models as models
 from app.database import get_db
-from app.rabbitmq import publish_message
+from app.rabbitmq.publisher import publisher_handler
 from app.routers.check_access_token import CheckAccessToken
+from app.schemas import NameUpdate, EmailUpdate, PasswordUpdate, JWTData
+from app.utils import hash_password, compare_hash
 
 router = APIRouter(prefix="/update")
 logger = getLogger("uvicorn")
@@ -65,8 +66,10 @@ def update_email(
                      models.User.updated_at: datetime.datetime.now()},
                     synchronize_session=False)
     db.commit()
-    publish_message(message={"email": update_data.new_email},
-                    queue_name="update_email_email")
+    publisher_handler.publish(
+        queue_name="update_email_email",
+        message={"email": update_data.new_email},
+        action="update_email")
     logger.info(f"User id:{token_data.user_id} updated email")
 
 

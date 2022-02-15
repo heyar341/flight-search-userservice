@@ -1,12 +1,13 @@
-from fastapi import status, Depends, HTTPException, APIRouter
-from sqlalchemy.orm import Session
 from logging import getLogger
 
-from app.schemas import UserCreateReq
-from app.utils import hash_password, check_token
+from fastapi import status, Depends, HTTPException, APIRouter
+from sqlalchemy.orm import Session
+
 import app.models as models
 from app.database import get_db
-from app.rabbitmq import publish_message
+from app.rabbitmq.publisher import publisher_handler
+from app.schemas import UserCreateReq
+from app.utils import hash_password, check_token
 
 router = APIRouter()
 logger = getLogger("uvicorn")
@@ -32,5 +33,7 @@ def create_user(req: UserCreateReq, db: Session = Depends(get_db)) -> None:
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    publish_message(message={"email": user_data.email},
-                    queue_name="confirm_register_email")
+    publisher_handler.publish(
+        queue_name="confirm_register_email",
+        message={"email": user_data.email},
+        action="register")
